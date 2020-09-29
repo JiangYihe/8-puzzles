@@ -1,0 +1,212 @@
+#include <stdio.h>
+#include <math.h>
+#include <stdlib.h>
+#include <iostream>
+using namespace std;
+ 
+int goal[9] = { 1,2,3,4,5,6,7,8,0 };//goal为棋盘的目标布局
+int intermediate[9];//中间过程棋盘
+ 
+struct Board
+{
+	int a[9];
+	int depth;
+	int fn;
+	int prenode;  //前一次移动方式
+};
+ 
+struct LinkList
+{
+	Board node;
+	LinkList *parent;
+	LinkList *pre;
+	LinkList *next;
+	LinkList *path; //专门记录路径
+};
+ 
+void SetBoard(int current[], int b[]);//更新纪录八数码的状态
+int Weight(int a[]);
+LinkList *NewNode(LinkList *nowmin, int depth, int direction);//生成一个新节点的函数
+LinkList *AddNode(LinkList *Openhead, LinkList *node);
+LinkList *MinNode(LinkList *Openhead);
+ 
+int main()
+{
+	int depth = 0;
+	int initial[9] = {0,5,2,1,4,3,7,8,6};
+    int i;
+	LinkList *Open = new LinkList;
+	LinkList *node = new LinkList;
+ 
+    //初始化
+    for (int i = 0;i <= 8;i++)
+        Open->node.a[initial[i]] = i;
+    Open->node.depth = depth;
+	Open->node.prenode = 0;
+	Open->node.fn = depth + Weight(initial);
+	Open->next = NULL;
+	Open->pre = NULL;
+	Open->parent = NULL;
+ 
+	while (Open)
+	{
+		node = MinNode(Open);  //求具有最小启发值的移动
+ 
+		SetBoard(intermediate, node->node.a);   //写当前过程棋盘intermediate
+ 
+		if (!Weight(intermediate))//已经排好
+			break;
+ 
+        //从Open表中删除当前最小节点 因为已扩充完毕
+        if (node != Open)
+		{
+			node->pre->next = node->next;
+			node->next->pre = node->pre;
+		}
+		else
+		{
+			if (Open->next)
+			{
+				Open = Open->next;
+				Open->pre = NULL;
+			}
+			else Open = NULL;
+		}
+		//判断棋子是否回到之前状态 node当前移动方式
+		if (node->node.a[0] - 1 >= 0 && node->node.prenode != 2)//左移一个仍在棋盘中 且之前不是右移操作
+			Open = AddNode(Open, NewNode(node, depth, 1));
+		if (node->node.a[0] + 1 <= 8 && node->node.prenode != 1)
+			Open = AddNode(Open, NewNode(node, depth, 2));
+		if (node->node.a[0] - 3 >= 0 && node->node.prenode != 4)
+			Open = AddNode(Open, NewNode(node, depth, 3));
+		if (node->node.a[0] + 3 <= 8 && node->node.prenode != 3)
+			Open = AddNode(Open, NewNode(node, depth, 4));
+		depth++;
+	}//end_while
+ 
+    if (Open)//输出解
+	{
+		node->path = NULL;
+		while (node->parent)           //回溯父节点，生成路径
+		{
+			node->parent->path = node;//path是专门用来记录路径的 从下向上回溯记录
+			node = node->parent;
+		}
+		int j = 0;
+		while (node->path)//此时node是输出的头
+		{
+			SetBoard(intermediate, node->node.a);//每一步进行更新
+			printf("第%d步：\n", j + 1);
+			for (i = 0; i < 9;i++)
+            {
+                printf("%d  ", intermediate[i]);
+                if(!((i + 1) % 3))
+                    cout << endl;
+            }
+			node = node->path;//从上到下输出
+			j++;
+		}
+		SetBoard(intermediate, node->node.a);
+		printf("第%d步：\n", j + 1);
+        for (i = 0; i < 9;i++)
+        {
+            printf("%d  ", intermediate[i]);
+            if(!((i + 1) % 3))
+                cout << endl;
+        }
+	}
+    else
+		printf("无法求解！");
+}
+ 
+//更新记录
+void SetBoard(int intermediate[], int b[])
+{
+	for (int i = 0;i <= 8;i++)
+        intermediate[b[i]] = i;
+}
+int Weight(int a[])   //不在位棋子数
+{
+    int c = 0;
+    int b = 0;
+	for (int i = 0;i <= 8;i++)
+        for (int j = 0;j <= 8;j++)
+        {
+             if (a[i] == goal[j])
+            {
+                if (goal[j] != 0 && i != j) //  找到当前棋子与目标棋子 i!=j代表未放置在目标位置
+                {
+                      c += abs(i%3-j%3)+abs((i- i%3)/3-(j- j%3)/3);
+                }
+ 
+            }
+        }
+	return c;
+}
+ 
+LinkList *NewNode(LinkList *nowmin, int depth, int direction)
+{
+	LinkList *temp = new LinkList;
+	for (int i = 0;i <= 8;i++)  //拷贝
+		temp->node.a[i] = nowmin->node.a[i];
+ 
+	switch (direction)
+	{
+	case 1: //向左移
+	{
+		temp->node.a[0]--;
+		temp->node.a[intermediate[temp->node.a[0]]]++;
+		break;
+	}
+	case 2://向右移
+	{
+		temp->node.a[0]++;
+		temp->node.a[intermediate[temp->node.a[0]]]--;
+		break;
+	}//上下移动均为3的关系
+	case 3:
+	{
+		temp->node.a[0] -= 3;
+		temp->node.a[intermediate[temp->node.a[0]]] += 3;  //向上移
+		break;
+	}
+	case 4:
+	{
+		temp->node.a[0] += 3;
+		temp->node.a[intermediate[temp->node.a[0]]] -= 3;   //向下移
+		break;
+	}
+	}
+    temp->node.depth = depth + 1;//结点扩展后 深度加一
+	SetBoard(intermediate, temp->node.a);//更新
+	temp->node.fn = temp->node.depth + Weight(intermediate);
+	temp->node.prenode = direction;//prenode记录移动的方向
+	temp->parent = nowmin;
+ 
+	return temp;
+}
+LinkList *AddNode(LinkList *Openhead, LinkList *node)   //加入Open表
+{
+	LinkList *h;
+	h = Openhead;
+	Openhead = node;
+	Openhead->next = h;
+	Openhead->pre = NULL;
+	if (h)
+		h->pre = Openhead;
+	return Openhead;
+}
+//求启发值最小的结点
+LinkList *MinNode(LinkList *Openhead)
+{
+	LinkList *minnode, *nextnode;
+	minnode = Openhead;
+	nextnode = Openhead;
+	while (nextnode)    //执行到倒数第二个结束
+	{
+		if (minnode->node.fn > nextnode->node.fn)
+			minnode = nextnode;
+		nextnode = nextnode->next;
+	}
+	return minnode;
+}
